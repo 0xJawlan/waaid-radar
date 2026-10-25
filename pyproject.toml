@@ -1,0 +1,21 @@
+[project]
+name = "waaid-radar"
+version = "1.0.0"
+description = "Watches the Waaid scholarship path page and posts new programs to Telegram"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31", "beautifulsoup4>=4.12", "lxml>=5.0", "tzdata; platform_system == 'Windows'"]
+
+[project.optional-dependencies]
+render = ["playwright>=1.40"]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "SIM"]

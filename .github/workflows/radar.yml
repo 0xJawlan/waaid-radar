@@ -1,0 +1,77 @@
+name: waaid-radar
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"   # every 3 hours (UTC): check the page
+    - cron: "7 6 * * 0"      # Sunday 09:07 Riyadh: weekly digest
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "check = verify Telegram · preview = show parsed programs · run = check the page now · digest = weekly summary"
+        type: choice
+        options: [run, preview, check, digest]
+        default: run
+
+permissions:
+  contents: write   # to commit data/state.json
+
+concurrency:
+  group: waaid-radar
+  cancel-in-progress: false
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHANNEL_ID: ${{ vars.TELEGRAM_CHANNEL_ID }}
+      TELEGRAM_ADMIN_CHAT_ID: ${{ vars.TELEGRAM_ADMIN_CHAT_ID }}
+      PERSONAL_TAGS: ${{ vars.PERSONAL_TAGS }}
+      QUIET_HOURS: ${{ vars.QUIET_HOURS }}
+      SEED_POST_ACTIVE: ${{ vars.SEED_POST_ACTIVE }}
+      RENDER_JS: ${{ vars.RENDER_JS }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Install a headless browser (only when RENDER_JS is auto/true)
+        if: vars.RENDER_JS == 'auto' || vars.RENDER_JS == 'true'
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Pick the command
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          CHOSEN: ${{ inputs.command }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then cmd="$CHOSEN"
+          elif [ "$SCHEDULE" = "7 6 * * 0" ]; then cmd="digest"
+          else cmd="run"; fi
+          echo "command=$cmd" >> "$GITHUB_OUTPUT"
+
+      - name: Radar
+        run: python -m waaid_radar "${{ steps.pick.outputs.command }}"
+
+      - name: Save state
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain data/)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/
+            git commit -m "radar: update state"
+            git pull --rebase --autostash
+            git push
+          fi
