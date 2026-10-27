@@ -65,6 +65,27 @@ def test_other_errors_raise():
     assert err.value.code == 403
 
 
+def test_edit_treats_an_unchanged_text_as_done():
+    unchanged = FakeResponse({"ok": False, "error_code": 400,
+                              "description": "Bad Request: message is not modified: specified new message content "
+                                             "and reply markup are exactly the same"}, 400)
+    tg, session, _ = make(unchanged)
+    tg.edit("@c", 5, "<b>نص</b>")
+    method, payload = session.calls[0]
+    assert method == "editMessageText" and payload["message_id"] == 5 and payload["parse_mode"] == "HTML"
+
+
+def test_edit_falls_back_to_plain_text_and_raises_other_errors():
+    bad = FakeResponse({"ok": False, "error_code": 400, "description": "Bad Request: can't parse entities"}, 400)
+    tg, session, _ = make(bad, ok())
+    tg.edit("@c", 5, "<b>عنوان</b>")
+    assert "parse_mode" not in session.calls[1][1] and session.calls[1][1]["text"] == "عنوان"
+    gone = FakeResponse({"ok": False, "error_code": 400, "description": "Bad Request: message to edit not found"}, 400)
+    tg, _, _ = make(gone)
+    with pytest.raises(TelegramError):
+        tg.edit("@c", 5, "x")
+
+
 def test_messages_to_one_chat_are_spaced_out():
     times = iter([0.0, 1.0, 4.2])  # first send at t=0, second asked at t=1 → waits 2.2 s
     sleeps = []

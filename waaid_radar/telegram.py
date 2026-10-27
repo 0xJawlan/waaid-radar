@@ -97,6 +97,29 @@ class Telegram:
             payload["text"] = strip_html(text)
             return self.call("sendMessage", payload)["message_id"]
 
+    def edit(self, chat_id: str, message_id: int, text: str) -> None:
+        """Replace the text of a message the bot sent. Editing to the same text is not an error."""
+        self._throttle(chat_id)
+        payload: dict = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "link_preview_options": {"is_disabled": True},
+        }
+        try:
+            self.call("editMessageText", payload)
+        except TelegramError as exc:
+            description = exc.description.lower()
+            if exc.code == 400 and "not modified" in description:
+                return
+            if exc.code != 400 or "parse" not in description:
+                raise
+            log.warning("Telegram rejected the HTML, editing with plain text instead: %s", exc.description)
+            payload.pop("parse_mode")
+            payload["text"] = strip_html(text)
+            self.call("editMessageText", payload)
+
     def forward(self, chat_id: str, from_chat_id: str, message_id: int, *, silent: bool = False) -> int:
         self._throttle(chat_id)
         payload = {"chat_id": chat_id, "from_chat_id": from_chat_id, "message_id": message_id,
@@ -131,6 +154,10 @@ class DryRunTelegram:
         flags = " ".join(f for f, on in (("(reply)", reply_to), ("(silent)", silent)) if on)
         self.out(f"\n──── → {chat_id} {flags}\n{strip_html(text)}")
         return self._record(kind="send", chat_id=chat_id, text=text, reply_to=reply_to, silent=silent)
+
+    def edit(self, chat_id: str, message_id: int, text: str) -> None:
+        self.out(f"\n──── ✎ {chat_id}: edit of message {message_id}\n{strip_html(text)}")
+        self.sent.append({"kind": "edit", "chat_id": chat_id, "message_id": message_id, "text": text})
 
     def forward(self, chat_id: str, from_chat_id: str, message_id: int, *, silent: bool = False) -> int:
         self.out(f"\n──── → {chat_id}: forward of message {message_id} from {from_chat_id}")

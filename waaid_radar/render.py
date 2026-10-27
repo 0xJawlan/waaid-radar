@@ -70,8 +70,20 @@ def period_text(p: Program, today: date) -> str:
     return " · ".join(part for part in (when, status_text(p, today)) if part)
 
 
+STATUS_LINE = {
+    Status.UPCOMING: "🔜 <b>الحالة:</b> لم يبدأ التقديم بعد",
+    Status.OPEN: "🟢 <b>الحالة:</b> التقديم مفتوح",
+    Status.ENDED: "🔴 <b>الحالة:</b> انتهى التقديم",
+}
+
+
 def program_post(p: Program, today: date, page_url: str) -> str:
-    """The full announcement of one program."""
+    """The full announcement of one program.
+
+    The post stays in the channel, so it carries fixed dates and a status label
+    only (never «يُغلق بعد 3 أيام»); the engine edits it when either changes.
+    Countdowns belong in reminders, which are read when they arrive.
+    """
     title = [f"<b>{_e(p.title)}</b>"]
     if p.program and fold(p.program) != fold(p.title):
         title.append(_e(p.program))
@@ -83,10 +95,13 @@ def program_post(p: Program, today: date, page_url: str) -> str:
             ("🌍", "الدولة", p.country),
             ("⏳", "المدة", p.duration),
             ("🗓", "بداية الدراسة", p.start),
-            ("📝", "التقديم", period_text(p, today)),
+            ("📝", "فترة التقديم", fmt_range(p.period_start, p.period_end) or p.period_raw),
         )
         if value
     ]
+    status = STATUS_LINE.get(p.status(today))
+    if status:
+        fields.append(status)
     footer = ([" ".join(f"#{t}" for t in p.tags)] if p.tags else []) + [
         f'<a href="{_attr(page_url)}">صفحة المسار في موقع الوزارة</a>'
     ]

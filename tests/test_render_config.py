@@ -26,10 +26,23 @@ def program(**kw):
 def test_program_post_has_every_field_and_tags():
     text = program_post(program(), date(2026, 10, 24), URL)
     for piece in ("🆕", "<b>ماجستير في الأمن السيبراني</b>", "Master in Cybersecurity", "جامعة موناش",
-                  "أستراليا", "18 شهرًا", "فبراير 2027", "25 أكتوبر – 5 نوفمبر 2026 · يبدأ غدًا",
+                  "أستراليا", "18 شهرًا", "فبراير 2027", "📝 <b>فترة التقديم:</b> 25 أكتوبر – 5 نوفمبر 2026",
+                  "🔜 <b>الحالة:</b> لم يبدأ التقديم بعد",
                   "<blockquote expandable>• أن يكون المتقدم سعودي الجنسية</blockquote>",
                   "#حاسب #أمن_سيبراني #ماجستير #أستراليا #STC", f'<a href="{URL}">'):
         assert piece in text
+
+
+def test_program_post_has_a_status_label_and_no_countdown():
+    p = program()
+    assert "🟢 <b>الحالة:</b> التقديم مفتوح" in program_post(p, date(2026, 10, 30), URL)
+    assert "🔴 <b>الحالة:</b> انتهى التقديم" in program_post(p, date(2026, 11, 6), URL)
+    for day in (date(2026, 10, 20), date(2026, 10, 24), date(2026, 10, 30), date(2026, 11, 4)):
+        text = program_post(p, day, URL)
+        assert not any(word in text for word in ("يُغلق", "يبدأ بعد", "غدًا", "يومًا", "أيام"))
+    undated = program(period_raw=None, period_start=None, period_end=None)
+    text = program_post(undated, date(2026, 10, 30), URL)
+    assert "الحالة" not in text and "فترة التقديم" not in text
 
 
 def test_program_post_escapes_html_and_respects_the_length_limit():

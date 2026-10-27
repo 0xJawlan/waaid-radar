@@ -38,6 +38,8 @@ class Report:
     posted: list[str] = field(default_factory=list)
     reminders: list[str] = field(default_factory=list)
     updates: list[str] = field(default_factory=list)
+    edits: list[str] = field(default_factory=list)
+    failed_posts: list[str] = field(default_factory=list)
     alerts: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     first_run: bool = False
@@ -45,9 +47,9 @@ class Report:
     exit_code: int = 0
 
     def summary(self) -> str:
-        return (f"parsed={self.parsed} posted={len(self.posted)} reminders={len(self.reminders)} "
-                f"updates={len(self.updates)} alerts={self.alerts or '-'} errors={len(self.errors)} "
-                f"first_run={self.first_run} state_saved={self.saved}")
+        return (f"parsed={self.parsed} posted={len(self.posted)} edited={len(self.edits)} "
+                f"reminders={len(self.reminders)} updates={len(self.updates)} alerts={self.alerts or '-'} "
+                f"errors={len(self.errors)} first_run={self.first_run} state_saved={self.saved}")
 
 
 def load_programs(cfg: Config, today: date) -> list[Program]:
@@ -80,6 +82,11 @@ def _period_of(record: dict) -> str:
     start, end = record.get("period_start"), record.get("period_end")
     text = fmt_range(date.fromisoformat(start) if start else None, date.fromisoformat(end) if end else None)
     return text or record.get("period_raw") or "غير محددة"
+
+
+def view_key(p: Program, today: date) -> str:
+    """What a published post shows that can change over time: the status and the dates."""
+    return "|".join((p.status(today).value, _iso(p.period_start) or "", _iso(p.period_end) or ""))
 
 
 class Radar:
@@ -150,6 +157,7 @@ class Radar:
                 fresh.append((prog, record))
 
         self._personal_new(fresh, today, quiet, rep)
+        self._sync_posts(programs, state, today, rep)  # edits make no sound, so quiet hours do not apply
         if not quiet:
             self._reminders(programs, state, today, rep)
         if rep.first_run:
@@ -196,8 +204,11 @@ class Radar:
         except TelegramError as exc:  # the record stays unsettled, so the next run retries
             log.error("posting %s failed: %s", prog.title, exc)
             rep.errors.append(f"{prog.title}: {exc}")
+            rep.failed_posts.append(prog.title)
             return False
         record["posts"]["main"] = message_id
+        record["posts"]["chat"] = self.cfg.main_chat
+        record["view"] = view_key(prog, today)
         record["events"].append("new")
         rep.posted.append(prog.title)
         return True
@@ -224,6 +235,29 @@ class Radar:
             if old[1] != new[1]:
                 record["events"] = [e for e in record["events"] if e != "closing"]
         record.update(_record_fields(prog))
+
+    def _sync_posts(self, programs: list[Program], state: dict, today: date, rep: Report) -> None:
+        """Edit published posts whose status (upcoming → open → ended) or dates changed.
+
+        Posts made before this feature existed have no stored view, so they are
+        brought to the current format once.
+        """
+        for prog in programs:
+            record = state["programs"].get(prog.pid)
+            message_id = record["posts"].get("main") if record else None
+            key = view_key(prog, today)
+            if not message_id or record.get("view") == key:
+                continue
+            chat = record["posts"].get("chat") or self.cfg.main_chat
+            try:
+                self.tg.edit(chat, message_id, render.program_post(prog, today, self.cfg.url))
+                rep.edits.append(prog.title)
+            except TelegramError as exc:
+                if exc.code != 400:  # network trouble or lost access: try again next run
+                    rep.errors.append(f"edit {prog.title}: {exc}")
+                    continue
+                log.warning("cannot edit the post of %s (%s); leaving it as is", prog.title, exc.description)
+            record["view"] = key
 
     # ------------------------------------------------------------ personal
 
@@ -306,8 +340,13 @@ class Radar:
         if not self.cfg.admin_chat:
             return
         lines = ["✅ <b>رادار واعد يعمل الآن</b>", "", f"قرأ {render.count_phrase(parsed)} من صفحة المسار."]
-        lines.append(f"ونشر {render.count_phrase(posted)} لم ينتهِ تقديمها بعد." if posted
-                     else "لا يوجد حاليًا برنامج مفتوح أو قادم.")
+        if posted:
+            lines.append(f"ونشر {render.count_phrase(posted)} لم ينتهِ تقديمها بعد.")
+        if rep.failed_posts:
+            lines.append(f"⚠️ تعذّر نشر {render.count_phrase(len(rep.failed_posts))}، "
+                         "وسيحاول نشرها مرة أخرى في التشغيل القادم.")
+        if not posted and not rep.failed_posts:
+            lines.append("لا يوجد حاليًا برنامج مفتوح أو قادم.")
         lines.append("وسيتابع الصفحة تلقائيًا وينبّه بأي جديد.")
         try:
             self.tg.send(self.cfg.admin_chat, "\n".join(lines))

@@ -51,8 +51,12 @@ class Harness:
     def digest(self, when):
         return Radar(self.cfg, self.tg, now=lambda: when, load=lambda d: parse_text(self.page, d)).digest()
 
-    def sent(self, chat=None, since=0):
-        return [m for m in self.tg.sent[since:] if chat is None or m["chat_id"] == chat]
+    def sent(self, chat=None, since=0, kinds=("send", "forward")):
+        """Messages that reach people (edits are listed separately by edits())."""
+        return [m for m in self.tg.sent[since:] if m["kind"] in kinds and (chat is None or m["chat_id"] == chat)]
+
+    def edits(self, since=0):
+        return self.sent(since=since, kinds=("edit",))
 
     def state(self):
         return json.loads(self.cfg.state_path.read_text(encoding="utf-8"))
@@ -74,8 +78,11 @@ def test_first_run_publishes_only_what_is_still_open(h):
     assert "برامج جديدة تطابق اهتماماتك (11)" in mine[0]["text"]
     assert "https://t.me/waaid_radar/" in mine[0]["text"]
     assert "رادار واعد يعمل الآن" in mine[1]["text"] and "26 برنامجًا" in mine[1]["text"]
-    events = [r["events"] for r in h.state()["programs"].values()]
+    records = h.state()["programs"].values()
+    events = [r["events"] for r in records]
     assert events.count(["new"]) == 11 and events.count(["seeded"]) == 15
+    posted = [r for r in records if r["events"] == ["new"]]
+    assert all(r["posts"]["chat"] == CHANNEL and r["view"] == "upcoming|2026-10-25|2026-11-05" for r in posted)
 
 
 def test_nothing_new_means_no_messages_and_no_state_change(h):
@@ -123,9 +130,10 @@ def test_reminders_wait_until_quiet_hours_end(h):
     h.run(at(10, 24, 20, 30))
     before = len(h.tg.sent)
     h.run(at(10, 25, 3, 17))
-    assert len(h.tg.sent) == before
+    assert not h.sent(since=before)
+    assert len(h.edits(since=before)) == 11  # edits make no sound, so they do not wait
     h.run(at(10, 25, 9, 17))
-    assert len(h.tg.sent) > before
+    assert h.sent(since=before)
 
 
 def test_new_posts_at_night_are_silent(h):
@@ -168,6 +176,8 @@ def test_deadline_extension_posts_update_and_rearms_reminder(h):
     update = h.sent(CHANNEL, since=before)[0]
     assert update["reply_to"] and "السابق: 25 أكتوبر – 5 نوفمبر 2026" in update["text"]
     assert "الجديد: 25 أكتوبر – 12 نوفمبر 2026" in update["text"]
+    (edit,) = h.edits(since=before)  # the post itself now shows the new dates
+    assert edit["message_id"] == update["reply_to"] and "25 أكتوبر – 12 نوفمبر 2026" in edit["text"]
     before = len(h.tg.sent)
     h.run(at(11, 11, 9), page=extended)
     closing = h.sent(CHANNEL, since=before)
@@ -269,6 +279,84 @@ def test_digest_lists_open_programs_with_links(h):
     digest = h.sent(CHANNEL, since=before)
     assert len(digest) == 1
     assert "مفتوح الآن (11)" in digest[0]["text"] and digest[0]["text"].count("https://t.me/waaid_radar/") == 11
+
+
+def test_posts_follow_the_application_status(h):
+    h.run(at(10, 24, 20, 30))
+    posts = h.sent(CHANNEL)
+    assert all("لم يبدأ التقديم بعد" in m["text"] and "غدًا" not in m["text"] for m in posts)
+    before = len(h.tg.sent)
+    rep = h.run(at(10, 25, 3, 17))
+    opened = h.edits(since=before)
+    assert len(rep.edits) == 11 and all("🟢 <b>الحالة:</b> التقديم مفتوح" in e["text"] for e in opened)
+    assert sorted(e["message_id"] for e in opened) == sorted(m["message_id"] for m in posts)
+    before = len(h.tg.sent)
+    h.run(at(10, 30, 12, 17))
+    assert not h.edits(since=before)  # nothing changed, nothing edited
+    h.run(at(11, 6, 9, 17))
+    closed = h.edits(since=before)
+    assert len(closed) == 11 and all("🔴 <b>الحالة:</b> انتهى التقديم" in e["text"] for e in closed)
+
+
+def test_posts_from_the_first_version_are_upgraded_once(h):
+    h.run(at(10, 25, 17, 45))
+    state = h.state()
+    for record in state["programs"].values():  # what version 1.0 stored
+        record.pop("view", None)
+        record["posts"].pop("chat", None)
+    h.cfg.state_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    before = len(h.tg.sent)
+    rep = h.run(at(10, 25, 18, 17))
+    assert len(rep.edits) == 11 and {e["chat_id"] for e in h.edits(since=before)} == {CHANNEL}
+    assert not h.sent(since=before)
+    before = len(h.tg.sent)
+    h.run(at(10, 25, 21, 17))
+    assert not h.edits(since=before)
+
+
+def test_post_that_cannot_be_edited_is_left_alone(h):
+    class NoEdits(DryRunTelegram):
+        def edit(self, chat_id, message_id, text):
+            raise TelegramError("editMessageText", 400, "Bad Request: message to edit not found")
+
+    h.tg = NoEdits(out=lambda _: None)
+    h.run(at(10, 24, 12))
+    rep = h.run(at(10, 25, 9))
+    assert rep.exit_code == 0 and not rep.edits
+    posted = [r for r in h.state()["programs"].values() if "new" in r["events"]]
+    assert all(r["view"].startswith("open|") for r in posted)  # not retried on every run
+
+
+def test_edit_that_fails_for_another_reason_is_retried(h):
+    class Flaky(DryRunTelegram):
+        broken = True
+
+        def edit(self, chat_id, message_id, text):
+            if self.broken:
+                raise TelegramError("editMessageText", 502, "Bad Gateway")
+            super().edit(chat_id, message_id, text)
+
+    h.tg = Flaky(out=lambda _: None)
+    h.run(at(10, 24, 12))
+    rep = h.run(at(10, 25, 9))
+    assert rep.exit_code == 1 and not rep.edits
+    h.tg.broken = False
+    rep = h.run(at(10, 25, 12))
+    assert len(rep.edits) == 11 and rep.exit_code == 0
+
+
+def test_start_up_report_mentions_posts_that_failed(h):
+    class NoChannel(DryRunTelegram):
+        def send(self, chat_id, text, **kw):
+            if chat_id == CHANNEL:
+                raise TelegramError("sendMessage", 400, "Bad Request: chat not found")
+            return super().send(chat_id, text, **kw)
+
+    h.tg = NoChannel(out=lambda _: None)
+    rep = h.run(at(10, 24, 12))
+    assert rep.exit_code == 1 and len(rep.failed_posts) == 11
+    report = h.sent(ME)[-1]["text"]
+    assert "تعذّر نشر 11 برنامجًا" in report and "لا يوجد حاليًا" not in report
 
 
 def test_monthly_heartbeat_touches_state(h):
