@@ -197,7 +197,8 @@
    "company": "شركة الاتصالات السعودية (STC)",
    "country": "سنغافورة",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-10-25",
    "institution": "الجامعة الوطنية في سنغافورة (NUS)",
@@ -372,7 +373,8 @@
    "company": "شركة الاتصالات السعودية (STC)",
    "country": "أستراليا",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-10-25",
    "institution": "جامعة موناش",
@@ -734,7 +736,8 @@
    "company": "شركة الاتصالات السعودية (STC)",
    "country": "أستراليا",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-10-25",
    "institution": "جامعة ملبورن",
@@ -759,7 +762,8 @@
    "company": "شركة الاتصالات السعودية (STC)",
    "country": "أستراليا",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-10-25",
    "institution": "جامعة موناش",
@@ -826,7 +830,8 @@
    "company": "شركة الاتصالات السعودية (STC)",
    "country": "سنغافورة",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-10-25",
    "institution": "الجامعة الوطنية في سنغافورة (NUS)",
@@ -1204,7 +1209,8 @@
    "company": "شركة الاتصالات السعودية (STC)",
    "country": "أستراليا",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-10-25",
    "institution": "جامعة موناش",
@@ -1272,7 +1278,8 @@
    "company": "شركة الاتصالات السعودية (STC)",
    "country": "سنغافورة",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-10-25",
    "institution": "الجامعة الوطنية في سنغافورة (NUS)",
@@ -1363,7 +1370,8 @@
    "company": "شركة الاتصالات السعودية (STC)",
    "country": "سنغافورة",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-10-25",
    "institution": "الجامعة الوطنية في سنغافورة (NUS)",
@@ -1643,7 +1651,8 @@
    "company": "شركة الاتصالات السعودية (STC)",
    "country": "سنغافورة",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-10-25",
    "institution": "الجامعة الوطنية في سنغافورة (NUS)",
@@ -2752,7 +2761,8 @@
    "company": "شركة الاتصالات السعودية (STC)",
    "country": "أستراليا",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-10-25",
    "institution": "جامعة ملبورن",
@@ -2865,7 +2875,8 @@
    "company": "شركة الاتصالات السعودية (STC)",
    "country": "أستراليا",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-10-25",
    "institution": "جامعة موناش",
