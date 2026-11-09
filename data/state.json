@@ -901,7 +901,8 @@
    "company": "شركة كمنز",
    "country": "الهند",
    "events": [
-    "new"
+    "new",
+    "opens"
    ],
    "first_seen": "2026-11-08",
    "institution": "شركة كمنز الهند",
@@ -2485,7 +2486,8 @@
    "country": "المملكة المتحدة",
    "events": [
     "new",
-    "opens"
+    "opens",
+    "closing"
    ],
    "first_seen": "2026-10-29",
    "institution": null,
