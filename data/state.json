@@ -814,7 +814,8 @@
    "company": "شركة طيران أديل",
    "country": "أسبانيا",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-11-23",
    "institution": null,
@@ -2865,7 +2866,8 @@
    "company": "شركة الخطوط السعودية",
    "country": "الولايات المتحدة الأمريكية",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-11-23",
    "institution": "إيرباص ميامي",
@@ -3665,7 +3667,8 @@
    "company": "شركة الخطوط السعودية",
    "country": "المملكة المتحدة",
    "events": [
-    "new"
+    "new",
+    "closing"
    ],
    "first_seen": "2026-11-23",
    "institution": "Acron Aviation Training",
